@@ -1,0 +1,16 @@
+REPORTE DE COMPILACION MINILANG
+Archivo: prueba1.mlng
+
+--- LISTADO DE TOKENS ---
+line 1, col 1: [WRITE, "write"]
+line 1, col 6: [PARENIZQ, "("]
+line 1, col 7: [STRINGWORD, ""Hola Mundo""]
+line 1, col 19: [PARENDER, ")"]
+line 1, col 20: [PYC, ";"]
+line 1, col 21: [EOF, "$"]
+
+--- RESUMEN DE ERRORES ---
+No se detectaron errores durante la compilacion.
+
+--- RESULTADO FINAL ---
+COMPILACION EXITOSA - CADENA ACEPTADA
