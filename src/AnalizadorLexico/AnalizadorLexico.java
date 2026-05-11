@@ -1,7 +1,6 @@
 package AnalizadorLexico;
 
 import Stack.PilaIdentacion;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -163,14 +162,15 @@ public class AnalizadorLexico {
         String resto = contenido.substring(pos);
 
         String[] reservadas = {
-                "int", "float", "string", "bool", "if", "else", "for", "while",
+                "const", "int", "float", "string", "bool", "if", "else", "for", "while",
                 "true", "false", "read", "write"
         };
 
         Token.TipoToken[] tiposReservados = {
-                Token.TipoToken.INT, Token.TipoToken.FLOAT, Token.TipoToken.STRING, Token.TipoToken.BOOL,
-                Token.TipoToken.IF, Token.TipoToken.ELSE, Token.TipoToken.FOR, Token.TipoToken.WHILE,
-                Token.TipoToken.TRUE, Token.TipoToken.FALSE, Token.TipoToken.READ, Token.TipoToken.WRITE
+                Token.TipoToken.CONST, Token.TipoToken.INT, Token.TipoToken.FLOAT, Token.TipoToken.STRING,
+                Token.TipoToken.BOOL, Token.TipoToken.IF, Token.TipoToken.ELSE, Token.TipoToken.FOR,
+                Token.TipoToken.WHILE, Token.TipoToken.TRUE, Token.TipoToken.FALSE, Token.TipoToken.READ,
+                Token.TipoToken.WRITE
         };
 
         for (int i = 0; i < reservadas.length; i++) {
