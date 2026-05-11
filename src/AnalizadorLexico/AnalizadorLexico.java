@@ -1,6 +1,7 @@
 package AnalizadorLexico;
 
 import Stack.PilaIdentacion;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -69,9 +70,12 @@ public class AnalizadorLexico {
             }
         }
 
-        while (!pila.estaEnBase()) {
-            pila.desapilarNivel();
-            tokens.add(new Token(Token.TipoToken.DEDENT, "DEDENT", lineaActual, columnaActual));
+        List<PilaIdentacion.AccionIdentacion> accionesFinales = pila.finalizarArchivo();
+
+        for (PilaIdentacion.AccionIdentacion accion : accionesFinales) {
+            if (accion == PilaIdentacion.AccionIdentacion.DEDENT) {
+                tokens.add(new Token(Token.TipoToken.DEDENT, "DEDENT", lineaActual, columnaActual));
+            }
         }
 
         tokens.add(new Token(Token.TipoToken.EOF, "$", lineaActual, columnaActual));
@@ -80,17 +84,18 @@ public class AnalizadorLexico {
 
     //Procesa la indentacion solo cuando la linea tiene codigo real
     private void procesarIndentacion(List<Token> tokens) {
-        int conteoEspacios = 0;
+        int espacios = 0;
+        int tabs = 0;
 
         while (pos < contenido.length()) {
             char c = contenido.charAt(pos);
 
             if (c == ' ') {
-                conteoEspacios++;
+                espacios++;
                 pos++;
                 columnaActual++;
             } else if (c == '\t') {
-                conteoEspacios += 4;
+                tabs++;
                 pos++;
                 columnaActual++;
             } else {
@@ -108,26 +113,14 @@ public class AnalizadorLexico {
             return;
         }
 
-        int nivelPrevio = pila.getNivelActual();
+        int nivelActual = pila.calcularNivel(espacios, tabs);
+        List<PilaIdentacion.AccionIdentacion> acciones = pila.procesarNivel(nivelActual, lineaActual);
 
-        if (conteoEspacios > nivelPrevio) {
-            if (!pila.nivelValido(conteoEspacios)) {
-                errores.add(String.format("line %d, col 1: ERROR Sobrepaso de limite de indentacion (maximo 5 niveles)",
-                        lineaActual));
-                return;
-            }
-
-            pila.apilarNivel(conteoEspacios);
-            tokens.add(new Token(Token.TipoToken.INDENT, "INDENT", lineaActual, 1));
-        } else if (conteoEspacios < nivelPrevio) {
-            while (conteoEspacios < pila.getNivelActual()) {
-                pila.desapilarNivel();
+        for (PilaIdentacion.AccionIdentacion accion : acciones) {
+            if (accion == PilaIdentacion.AccionIdentacion.INDENT) {
+                tokens.add(new Token(Token.TipoToken.INDENT, "INDENT", lineaActual, 1));
+            } else if (accion == PilaIdentacion.AccionIdentacion.DEDENT) {
                 tokens.add(new Token(Token.TipoToken.DEDENT, "DEDENT", lineaActual, 1));
-            }
-
-            if (conteoEspacios != pila.getNivelActual()) {
-                errores.add(String.format("line %d, col 1: ERROR Indentacion invalida. No coincide con ningun nivel abierto",
-                        lineaActual));
             }
         }
     }

@@ -12,14 +12,18 @@ import java.util.Scanner;
 
 public class Inicio {
 
+    //ATRIBUTOS
     private final Scanner scanner;
     private final ArchivoMiniLang gestorArchivo;
 
+    //CONSTRUCTOR
     public Inicio() {
         this.scanner = new Scanner(System.in);
         this.gestorArchivo = new ArchivoMiniLang();
     }
 
+    //METODOS
+    //Inicia el menu principal del programa
     public void iniciar() {
         boolean salir = false;
 
@@ -48,11 +52,13 @@ public class Inicio {
         scanner.close();
     }
 
+    //Muestra el menu para analizar un archivo
     private void menuArchivo() {
         System.out.print("\nIngrese la ruta del archivo (.mlng): ");
         String rutaEntrada = scanner.nextLine().trim();
 
         String contenido;
+
         try {
             contenido = gestorArchivo.leerContenido(rutaEntrada);
             System.out.println("Archivo .mlng leido correctamente.");
@@ -62,6 +68,7 @@ public class Inicio {
         }
 
         boolean volver = false;
+
         while (!volver) {
             System.out.println("\n------ Menu de archivo ------");
             System.out.println("1. Analizar (Generar .out)");
@@ -88,18 +95,14 @@ public class Inicio {
         }
     }
 
+    //Ejecuta el analisis lexico, de indentacion y sintactico
     private void ejecutarAnalisis(String rutaEntrada, String contenido, boolean generarOut, boolean mostrarConsola) {
         try {
             AnalizadorLexico lexer = new AnalizadorLexico(contenido);
             List<Token> tokens = lexer.analizar();
 
             PilaIdentacion pila = lexer.getPila();
-            List<String> erroresIndentacion = new ArrayList<>();
-
-            if (!pila.estaEnBase()) {
-                erroresIndentacion.add("line " + lexer.getLineaActual() + ", col 1: ERROR El programa finaliza en nivel "
-                        + pila.getNivelActual() + " en lugar de nivel 0. No se cerraron todas las indentaciones.");
-            }
+            List<String> erroresIndentacion = new ArrayList<>(pila.getErrores());
 
             AnalizadorSintactico sintactico = new AnalizadorSintactico();
             boolean sintaxisCorrecta = sintactico.analizar(tokens);
@@ -114,20 +117,25 @@ public class Inicio {
 
             if (mostrarConsola) {
                 System.out.println("\n--- TOKENS ---");
+
                 for (Token token : tokens) {
                     System.out.println(token);
                 }
 
                 System.out.println("\n--- RESUMEN DE ERRORES ---");
+
                 int total = erroresLex.size() + erroresIndentacion.size() + erroresSin.size();
+
                 System.out.println("Total de errores: " + total);
 
                 for (String err : erroresLex) {
                     System.out.println("[LEXICO] " + err);
                 }
+
                 for (String err : erroresIndentacion) {
                     System.out.println("[INDENTACION] " + err);
                 }
+
                 for (String err : erroresSin) {
                     System.out.println("[SINTACTICO] " + err);
                 }
@@ -149,6 +157,7 @@ public class Inicio {
         }
     }
 
+    //Genera el archivo .out con tokens y errores encontrados
     private void generarReporte(String ruta, List<Token> tokens, List<String> erroresLex,
                                 List<String> erroresInd, List<String> erroresSin, boolean exitosa) {
         StringBuilder reporte = new StringBuilder();
@@ -157,12 +166,14 @@ public class Inicio {
         reporte.append("Archivo: ").append(ruta).append("\n\n");
 
         reporte.append("--- LISTADO DE TOKENS ---\n");
+
         for (Token t : tokens) {
             reporte.append(t.toString()).append("\n");
         }
-        reporte.append("\n");
 
+        reporte.append("\n");
         reporte.append("--- RESUMEN DE ERRORES ---\n");
+
         List<String> todosLosErrores = new ArrayList<>();
         todosLosErrores.addAll(erroresLex);
         todosLosErrores.addAll(erroresInd);
@@ -172,12 +183,15 @@ public class Inicio {
             reporte.append("No se detectaron errores durante la compilacion.\n");
         } else {
             reporte.append("Total de errores: ").append(todosLosErrores.size()).append("\n\n");
+
             for (String err : erroresLex) {
                 reporte.append("[LEXICO] ").append(err).append("\n");
             }
+
             for (String err : erroresInd) {
                 reporte.append("[INDENTACION] ").append(err).append("\n");
             }
+
             for (String err : erroresSin) {
                 reporte.append("[SINTACTICO] ").append(err).append("\n");
             }
