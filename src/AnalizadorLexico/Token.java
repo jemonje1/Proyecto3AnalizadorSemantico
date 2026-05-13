@@ -6,7 +6,10 @@ public class Token {
     public enum TipoToken {
 
         //PALABRAS RESERVADAS
-        CONST, INT, FLOAT, STRING, BOOL, IF, ELSE, FOR, WHILE, TRUE, FALSE, READ, WRITE,
+        CONST, VOID, RETURN,
+        INT, FLOAT, STRING, BOOL,
+        IF, ELSE, FOR, WHILE,
+        TRUE, FALSE, READ, WRITE,
 
         //IDENTIFICADORES Y LITERALES
         ID, INTNUM, FLOATNUM, PERNUM, STRINGWORD,

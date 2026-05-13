@@ -6,24 +6,18 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-/**
- * Clase encargada del manejo de archivos para el compilador MiniLang.
- * Valida extensiones .mlng y gestiona la creación de archivos .out.
- */
 public class ArchivoMiniLang {
 
+    //ATRIBUTOS
     private final String extensionPermitida;
 
+    //CONSTRUCTOR
     public ArchivoMiniLang() {
         this.extensionPermitida = ".mlng";
     }
 
-    /**
-     * Valida que la ruta exista y que el archivo tenga la extensión permitida.
-     * * @param rutaArchivo Ruta proporcionada por el usuario.
-     * @return Path objeto de la ruta validada.
-     * @throws IOException Si el archivo no existe o la extensión es incorrecta.
-     */
+    //METODOS
+    //Valida que la ruta exista y que el archivo tenga extension permitida
     public Path validarArchivo(String rutaArchivo) throws IOException {
         Path ruta = Paths.get(rutaArchivo);
 
@@ -38,39 +32,38 @@ public class ArchivoMiniLang {
         return ruta;
     }
 
-    /**
-     * Verifica si el nombre del archivo termina con la extensión permitida.
-     */
+    //Verifica si el nombre del archivo termina con la extension permitida
     public boolean esExtensionValida(String rutaArchivo) {
         return rutaArchivo != null && rutaArchivo.toLowerCase().endsWith(extensionPermitida);
     }
 
-    /**
-     * Genera la ruta para el archivo de salida (.out) en la misma carpeta del original.
-     * * @param rutaEntrada String de la ruta del archivo original.
-     * @return Path de la ruta donde se escribirá el reporte.
-     */
+    //Genera la ruta para el archivo de salida out
     public Path obtenerRutaSalida(String rutaEntrada) {
+        return obtenerRutaConExtension(rutaEntrada, ".out");
+    }
+
+    //Genera la ruta para el archivo de tabla
+    public Path obtenerRutaTabla(String rutaEntrada) {
+        return obtenerRutaConExtension(rutaEntrada, ".tabla");
+    }
+
+    //Genera una ruta de salida con la extension indicada
+    private Path obtenerRutaConExtension(String rutaEntrada, String extension) {
         Path entrada = Paths.get(rutaEntrada);
         String nombreArchivo = entrada.getFileName().toString();
 
-        // Remover la extensión original y agregar .out
         int indicePunto = nombreArchivo.lastIndexOf('.');
         String nombreBase = (indicePunto >= 0) ? nombreArchivo.substring(0, indicePunto) : nombreArchivo;
-        String nombreSalida = nombreBase + ".out";
+        String nombreSalida = nombreBase + extension;
 
-        // Si el archivo no tiene carpeta padre (está en la raíz del proyecto)
         if (entrada.getParent() == null) {
             return Paths.get(nombreSalida);
         }
 
-        // Resolver la nueva ruta en el mismo directorio que el archivo original
         return entrada.getParent().resolve(nombreSalida);
     }
 
-    /**
-     * Método de conveniencia para leer todo el contenido de un archivo de texto.
-     */
+    //Lee todo el contenido de un archivo de texto
     public String leerContenido(String ruta) throws IOException {
         Path path = validarArchivo(ruta);
         return Files.readString(path, StandardCharsets.UTF_8);
