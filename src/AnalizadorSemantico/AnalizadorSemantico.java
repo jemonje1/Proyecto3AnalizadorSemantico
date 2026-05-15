@@ -3,7 +3,9 @@ package AnalizadorSemantico;
 import AnalizadorLexico.Token;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Stack;
 
 public class AnalizadorSemantico {
@@ -13,6 +15,7 @@ public class AnalizadorSemantico {
     private final List<String> errores;
     private final Stack<String> pilaAmbitos;
     private final Stack<Integer> nivelesFuncion;
+    private final Set<String> funcionesConReturn;
     private int nivelIndentacion;
     private String funcionPendiente;
     private String funcionActual;
@@ -24,6 +27,7 @@ public class AnalizadorSemantico {
         this.errores = new ArrayList<>();
         this.pilaAmbitos = new Stack<>();
         this.nivelesFuncion = new Stack<>();
+        this.funcionesConReturn = new HashSet<>();
         this.nivelIndentacion = 0;
         this.funcionPendiente = null;
         this.funcionActual = null;
@@ -35,6 +39,7 @@ public class AnalizadorSemantico {
     //Ejecuta el analisis semantico completo
     public boolean analizar(List<Token> tokens) {
         errores.clear();
+        funcionesConReturn.clear();
 
         for (int i = 0; i < tokens.size(); i++) {
             Token actual = tokens.get(i);
@@ -99,10 +104,8 @@ public class AnalizadorSemantico {
         }
 
         validarNoInicializados();
-
-        if (contadorMain == 0) {
-            errores.add("line 1, col 1: ERROR Semantico. No existe metodo main");
-        }
+        validarMain();
+        validarFuncionesConReturn();
 
         return errores.isEmpty();
     }
@@ -125,26 +128,26 @@ public class AnalizadorSemantico {
 
         if (tabla.existeEnAmbito(nombre, ambito)) {
             registrarError(nombreToken, "El simbolo '" + nombre + "' ya existe en el ambito " + ambito);
-        } else {
-            String valor = "no inicializado";
+            return avanzarHastaPyc(tokens, i);
+        }
 
-            if (i + 3 < tokens.size() && tokens.get(i + 3).getTipo() == Token.TipoToken.IGUAL) {
-                int fin = buscarPyc(tokens, i + 4);
-                valor = expresionComoTexto(tokens, i + 4, fin);
+        String valor = "no inicializado";
 
-                String tipoExpr = inferirTipoExpresion(tokens, i + 4, fin, ambito, nombreToken);
+        if (i + 3 < tokens.size() && tokens.get(i + 3).getTipo() == Token.TipoToken.IGUAL) {
+            int fin = buscarPyc(tokens, i + 4);
+            valor = obtenerValorParaTabla(tokens, i + 4, fin, ambito);
 
-                if (!tiposCompatibles(tipo, tipoExpr)) {
-                    registrarError(nombreToken, "No se puede asignar tipo '" + tipoExpr + "' a constante de tipo '" + tipo + "'");
-                }
+            String tipoExpr = inferirTipoExpresion(tokens, i + 4, fin, ambito, nombreToken);
 
-                tabla.agregarSimbolo(nombre, "constante", tipo, ambito, valor, nombreToken.getLinea(), nombreToken.getColumna());
-                return fin;
+            if (!tiposCompatibles(tipo, tipoExpr)) {
+                registrarError(nombreToken, "No se puede asignar tipo '" + tipoExpr + "' a constante de tipo '" + tipo + "'");
             }
 
             tabla.agregarSimbolo(nombre, "constante", tipo, ambito, valor, nombreToken.getLinea(), nombreToken.getColumna());
+            return fin;
         }
 
+        tabla.agregarSimbolo(nombre, "constante", tipo, ambito, valor, nombreToken.getLinea(), nombreToken.getColumna());
         return avanzarHastaPyc(tokens, i);
     }
 
@@ -171,7 +174,7 @@ public class AnalizadorSemantico {
 
         if (i + 2 < tokens.size() && tokens.get(i + 2).getTipo() == Token.TipoToken.IGUAL) {
             int fin = buscarPyc(tokens, i + 3);
-            valor = expresionComoTexto(tokens, i + 3, fin);
+            valor = obtenerValorParaTabla(tokens, i + 3, fin, ambito);
 
             String tipoExpr = inferirTipoExpresion(tokens, i + 3, fin, ambito, nombreToken);
 
@@ -236,7 +239,7 @@ public class AnalizadorSemantico {
         }
 
         int fin = buscarPyc(tokens, i + 2);
-        String valor = expresionComoTexto(tokens, i + 2, fin);
+        String valor = obtenerValorParaTabla(tokens, i + 2, fin, ambito);
         String tipoExpr = inferirTipoExpresion(tokens, i + 2, fin, ambito, nombreToken);
 
         if (simbolo.getCategoria().equals("constante") && !simbolo.getValorInfo().equals("no inicializado")) {
@@ -250,38 +253,13 @@ public class AnalizadorSemantico {
         return fin;
     }
 
-    //Procesa una llamada de funcion o metodo
+    //Procesa una llamada de funcion o metodo como sentencia
     private int procesarLlamadaFuncion(List<Token> tokens, int i) {
-        Token nombreToken = tokens.get(i);
-        String nombre = nombreToken.getLexema();
-        String ambito = ambitoActual();
+        int finArgs = validarLlamadaFuncion(tokens, i, ambitoActual());
+        int finPyc = buscarPyc(tokens, i);
 
-        TablaDeSimbolos.Simbolo funcion = tabla.buscarFuncionOMetodo(nombre);
-
-        int inicioArgs = i + 2;
-        int finArgs = buscarParentesisDerecho(tokens, inicioArgs);
-
-        if (funcion == null) {
-            registrarError(nombreToken, "La funcion o metodo '" + nombre + "' no ha sido declarado");
-            return finArgs;
-        }
-
-        List<String> argumentos = obtenerTiposArgumentos(tokens, inicioArgs, finArgs, ambito, nombreToken);
-        List<TablaDeSimbolos.Simbolo> parametros = tabla.getParametros(nombre);
-
-        if (argumentos.size() != parametros.size()) {
-            registrarError(nombreToken, "Cantidad incorrecta de argumentos para '" + nombre + "'");
-            return finArgs;
-        }
-
-        for (int j = 0; j < argumentos.size(); j++) {
-            String tipoArg = argumentos.get(j);
-            String tipoParam = parametros.get(j).getTipo();
-
-            if (!tiposCompatibles(tipoParam, tipoArg)) {
-                registrarError(nombreToken, "Argumento " + (j + 1) + " invalido para '" + nombre
-                        + "'. Se esperaba '" + tipoParam + "' y se recibio '" + tipoArg + "'");
-            }
+        if (finPyc > finArgs) {
+            return finPyc;
         }
 
         return finArgs;
@@ -312,6 +290,8 @@ public class AnalizadorSemantico {
             return fin;
         }
 
+        funcionesConReturn.add(funcionActual);
+
         if (i + 1 >= fin) {
             registrarError(returnToken, "La funcion '" + funcionActual + "' debe retornar un valor");
             return fin;
@@ -325,6 +305,42 @@ public class AnalizadorSemantico {
         }
 
         return fin;
+    }
+
+    //Valida una llamada de funcion o metodo y retorna donde termina
+    private int validarLlamadaFuncion(List<Token> tokens, int i, String ambito) {
+        Token nombreToken = tokens.get(i);
+        String nombre = nombreToken.getLexema();
+
+        TablaDeSimbolos.Simbolo funcion = tabla.buscarFuncionOMetodo(nombre);
+
+        int inicioArgs = i + 2;
+        int finArgs = buscarParentesisDerecho(tokens, inicioArgs);
+
+        if (funcion == null) {
+            registrarError(nombreToken, "La funcion o metodo '" + nombre + "' no ha sido declarado");
+            return finArgs;
+        }
+
+        List<String> argumentos = obtenerTiposArgumentos(tokens, inicioArgs, finArgs, ambito, nombreToken);
+        List<TablaDeSimbolos.Simbolo> parametros = tabla.getParametros(nombre);
+
+        if (argumentos.size() != parametros.size()) {
+            registrarError(nombreToken, "Cantidad incorrecta de argumentos para '" + nombre + "'");
+            return finArgs;
+        }
+
+        for (int j = 0; j < argumentos.size(); j++) {
+            String tipoArg = argumentos.get(j);
+            String tipoParam = parametros.get(j).getTipo();
+
+            if (!tiposCompatibles(tipoParam, tipoArg)) {
+                registrarError(nombreToken, "Argumento " + (j + 1) + " invalido para '" + nombre
+                        + "'. Se esperaba '" + tipoParam + "' y se recibio '" + tipoArg + "'");
+            }
+        }
+
+        return finArgs;
     }
 
     //Registra los parametros de una funcion o metodo
@@ -363,6 +379,143 @@ public class AnalizadorSemantico {
                         + ": ERROR Semantico. El simbolo '" + simbolo.getNombre()
                         + "' no fue inicializado");
             }
+        }
+    }
+
+    //Valida que exista un unico metodo main
+    private void validarMain() {
+        if (contadorMain == 0) {
+            errores.add("line 1, col 1: ERROR Semantico. No existe metodo main");
+        }
+    }
+
+    //Valida que las funciones con tipo tengan return
+    private void validarFuncionesConReturn() {
+        for (TablaDeSimbolos.Simbolo simbolo : tabla.getSimbolos()) {
+            if (simbolo.getCategoria().equals("funcion") && !funcionesConReturn.contains(simbolo.getNombre())) {
+                errores.add("line " + simbolo.getLinea() + ", col " + simbolo.getColumna()
+                        + ": ERROR Semantico. La funcion '" + simbolo.getNombre()
+                        + "' debe tener return");
+            }
+        }
+    }
+
+    //Obtiene el valor que se guardara en la tabla
+    private String obtenerValorParaTabla(List<Token> tokens, int inicio, int fin, String ambito) {
+        if (inicio >= fin) {
+            return "no inicializado";
+        }
+
+        if (esStringSimple(tokens, inicio, fin)) {
+            return quitarComillas(tokens.get(inicio).getLexema());
+        }
+
+        if (esBoolSimple(tokens, inicio, fin)) {
+            return tokens.get(inicio).getLexema();
+        }
+
+        Double valorCalculado = evaluarNumerica(tokens, inicio, fin, ambito);
+
+        if (valorCalculado != null) {
+            if (valorCalculado % 1 == 0) {
+                return String.valueOf(valorCalculado.intValue());
+            }
+
+            return String.valueOf(valorCalculado);
+        }
+
+        return expresionComoTexto(tokens, inicio, fin);
+    }
+
+    //Evalua una expresion numerica sencilla
+    private Double evaluarNumerica(List<Token> tokens, int inicio, int fin, String ambito) {
+        List<String> elementos = new ArrayList<>();
+
+        for (int i = inicio; i < fin && i < tokens.size(); i++) {
+            Token token = tokens.get(i);
+
+            if (token.getTipo() == Token.TipoToken.INTNUM
+                    || token.getTipo() == Token.TipoToken.FLOATNUM
+                    || token.getTipo() == Token.TipoToken.PERNUM) {
+                elementos.add(normalizarNumero(token.getLexema()));
+                continue;
+            }
+
+            if (esOperadorAritmetico(token)) {
+                elementos.add(token.getLexema());
+                continue;
+            }
+
+            if (token.getTipo() == Token.TipoToken.PARENIZQ || token.getTipo() == Token.TipoToken.PARENDER) {
+                elementos.add(token.getLexema());
+                continue;
+            }
+
+            if (token.getTipo() == Token.TipoToken.ID) {
+                if (i + 1 < fin && tokens.get(i + 1).getTipo() == Token.TipoToken.PARENIZQ) {
+                    return null;
+                }
+
+                TablaDeSimbolos.Simbolo simbolo = tabla.buscarVisible(token.getLexema(), ambito);
+
+                if (simbolo == null || simbolo.getValorInfo().equals("no inicializado")) {
+                    return null;
+                }
+
+                if (!esNumero(simbolo.getValorInfo())) {
+                    return null;
+                }
+
+                elementos.add(simbolo.getValorInfo());
+                continue;
+            }
+
+            return null;
+        }
+
+        if (elementos.isEmpty()) {
+            return null;
+        }
+
+        return evaluarElementosNumericos(elementos);
+    }
+
+    //Evalua una lista de elementos numericos con prioridad basica
+    private Double evaluarElementosNumericos(List<String> elementos) {
+        try {
+            List<String> copia = new ArrayList<>(elementos);
+
+            for (int i = 0; i < copia.size(); i++) {
+                String actual = copia.get(i);
+
+                if (actual.equals("*") || actual.equals("/")) {
+                    double izq = Double.parseDouble(copia.get(i - 1));
+                    double der = Double.parseDouble(copia.get(i + 1));
+                    double resultado = actual.equals("*") ? izq * der : izq / der;
+
+                    copia.set(i - 1, String.valueOf(resultado));
+                    copia.remove(i);
+                    copia.remove(i);
+                    i--;
+                }
+            }
+
+            double total = Double.parseDouble(copia.get(0));
+
+            for (int i = 1; i < copia.size(); i += 2) {
+                String operador = copia.get(i);
+                double der = Double.parseDouble(copia.get(i + 1));
+
+                if (operador.equals("+")) {
+                    total += der;
+                } else if (operador.equals("-")) {
+                    total -= der;
+                }
+            }
+
+            return total;
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -412,6 +565,35 @@ public class AnalizadorSemantico {
             }
 
             if (token.getTipo() == Token.TipoToken.ID) {
+                if (i + 1 < fin && tokens.get(i + 1).getTipo() == Token.TipoToken.PARENIZQ) {
+                    TablaDeSimbolos.Simbolo funcion = tabla.buscarFuncionOMetodo(token.getLexema());
+                    int finLlamada = validarLlamadaFuncion(tokens, i, ambito);
+
+                    if (funcion == null) {
+                        i = finLlamada;
+                        continue;
+                    }
+
+                    if (funcion.getCategoria().equals("metodo")) {
+                        registrarError(token, "No se puede usar metodo void '" + token.getLexema() + "' como valor");
+                        i = finLlamada;
+                        continue;
+                    }
+
+                    tieneValor = true;
+
+                    if (funcion.getTipo().equals("string")) {
+                        tieneString = true;
+                    } else if (funcion.getTipo().equals("bool")) {
+                        tieneBool = true;
+                    } else if (funcion.getTipo().equals("float")) {
+                        tieneFloat = true;
+                    }
+
+                    i = finLlamada;
+                    continue;
+                }
+
                 TablaDeSimbolos.Simbolo simbolo = tabla.buscarVisible(token.getLexema(), ambito);
 
                 if (simbolo == null) {
@@ -528,6 +710,50 @@ public class AnalizadorSemantico {
         return sb.toString();
     }
 
+    //Valida si la expresion es string directo
+    private boolean esStringSimple(List<Token> tokens, int inicio, int fin) {
+        return fin - inicio == 1 && tokens.get(inicio).getTipo() == Token.TipoToken.STRINGWORD;
+    }
+
+    //Valida si la expresion es bool directo
+    private boolean esBoolSimple(List<Token> tokens, int inicio, int fin) {
+        return fin - inicio == 1
+                && (tokens.get(inicio).getTipo() == Token.TipoToken.TRUE
+                || tokens.get(inicio).getTipo() == Token.TipoToken.FALSE);
+    }
+
+    //Quita comillas de un string
+    private String quitarComillas(String texto) {
+        if (texto == null) {
+            return "";
+        }
+
+        if (texto.length() >= 2 && texto.startsWith("\"") && texto.endsWith("\"")) {
+            return texto.substring(1, texto.length() - 1);
+        }
+
+        return texto;
+    }
+
+    //Normaliza porcentajes como numeros
+    private String normalizarNumero(String texto) {
+        if (texto.endsWith("%")) {
+            return texto.substring(0, texto.length() - 1);
+        }
+
+        return texto;
+    }
+
+    //Valida si un texto es numero
+    private boolean esNumero(String texto) {
+        try {
+            Double.parseDouble(texto);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     //Valida si un token es cabecera de funcion o metodo
     private boolean esCabeceraFuncion(List<Token> tokens, int i) {
         return i + 2 < tokens.size()
@@ -637,9 +863,19 @@ public class AnalizadorSemantico {
 
     //Busca parentesis derecho
     private int buscarParentesisDerecho(List<Token> tokens, int desde) {
+        int abiertos = 0;
+
         for (int i = desde; i < tokens.size(); i++) {
+            if (tokens.get(i).getTipo() == Token.TipoToken.PARENIZQ) {
+                abiertos++;
+            }
+
             if (tokens.get(i).getTipo() == Token.TipoToken.PARENDER) {
-                return i;
+                if (abiertos == 0) {
+                    return i;
+                }
+
+                abiertos--;
             }
         }
 
