@@ -1,7 +1,6 @@
 package AnalizadorSemantico;
 
 import AnalizadorLexico.Token;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -16,6 +15,7 @@ public class AnalizadorSemantico {
     private final Stack<String> pilaAmbitos;
     private final Stack<Integer> nivelesFuncion;
     private final Set<String> funcionesConReturn;
+    private final Set<Integer> indicesFuncionesProcesadas;
     private int nivelIndentacion;
     private String funcionPendiente;
     private String funcionActual;
@@ -28,6 +28,7 @@ public class AnalizadorSemantico {
         this.pilaAmbitos = new Stack<>();
         this.nivelesFuncion = new Stack<>();
         this.funcionesConReturn = new HashSet<>();
+        this.indicesFuncionesProcesadas = new HashSet<>();
         this.nivelIndentacion = 0;
         this.funcionPendiente = null;
         this.funcionActual = null;
@@ -40,6 +41,11 @@ public class AnalizadorSemantico {
     public boolean analizar(List<Token> tokens) {
         errores.clear();
         funcionesConReturn.clear();
+        indicesFuncionesProcesadas.clear();
+        reiniciarAmbitos();
+
+        registrarCabecerasFunciones(tokens);
+        reiniciarAmbitos();
 
         for (int i = 0; i < tokens.size(); i++) {
             Token actual = tokens.get(i);
@@ -82,7 +88,8 @@ public class AnalizadorSemantico {
 
             if (esTipoDato(actual) || actual.getTipo() == Token.TipoToken.VOID) {
                 if (esCabeceraFuncion(tokens, i)) {
-                    i = procesarFuncionOMetodo(tokens, i);
+                    funcionPendiente = tokens.get(i + 1).getLexema();
+                    i = buscarParentesisDerecho(tokens, i + 3);
                 } else {
                     i = procesarVariable(tokens, i);
                 }
@@ -108,6 +115,54 @@ public class AnalizadorSemantico {
         validarFuncionesConReturn();
 
         return errores.isEmpty();
+    }
+
+    //Registra todas las cabeceras de funciones y metodos antes del analisis principal
+    private void registrarCabecerasFunciones(List<Token> tokens) {
+        for (int i = 0; i < tokens.size(); i++) {
+            Token actual = tokens.get(i);
+
+            if ((esTipoDato(actual) || actual.getTipo() == Token.TipoToken.VOID) && esCabeceraFuncion(tokens, i)) {
+                procesarCabeceraFuncionOMetodo(tokens, i);
+                indicesFuncionesProcesadas.add(i);
+            }
+        }
+    }
+
+    //Procesa solamente la cabecera de una funcion o metodo
+    private int procesarCabeceraFuncionOMetodo(List<Token> tokens, int i) {
+        Token tipoToken = tokens.get(i);
+        Token nombreToken = tokens.get(i + 1);
+
+        String tipo = tipoComoTexto(tipoToken);
+        String nombre = nombreToken.getLexema();
+        String categoria = tipoToken.getTipo() == Token.TipoToken.VOID ? "metodo" : "funcion";
+
+        if (tabla.existeEnAmbito(nombre, "global")) {
+            registrarError(nombreToken, "La funcion o metodo '" + nombre + "' ya existe");
+        } else {
+            if (categoria.equals("metodo") && nombre.equals("main")) {
+                contadorMain++;
+
+                if (contadorMain > 1) {
+                    registrarError(nombreToken, "Solo puede existir un metodo main");
+                }
+            }
+
+            int inicioParams = i + 3;
+            int finParams = buscarParentesisDerecho(tokens, inicioParams);
+
+            String infoParametros = obtenerInfoParametros(tokens, inicioParams, finParams);
+
+            tabla.agregarSimbolo(nombre, categoria, tipo, "global", infoParametros,
+                    nombreToken.getLinea(), nombreToken.getColumna());
+
+            registrarParametros(tokens, inicioParams, finParams, nombre);
+
+            return finParams;
+        }
+
+        return buscarParentesisDerecho(tokens, i + 3);
     }
 
     //Procesa una constante
@@ -188,41 +243,6 @@ public class AnalizadorSemantico {
 
         tabla.agregarSimbolo(nombre, "variable", tipo, ambito, valor, nombreToken.getLinea(), nombreToken.getColumna());
         return avanzarHastaPyc(tokens, i);
-    }
-
-    //Procesa una funcion o metodo
-    private int procesarFuncionOMetodo(List<Token> tokens, int i) {
-        Token tipoToken = tokens.get(i);
-        Token nombreToken = tokens.get(i + 1);
-
-        String tipo = tipoComoTexto(tipoToken);
-        String nombre = nombreToken.getLexema();
-        String categoria = tipoToken.getTipo() == Token.TipoToken.VOID ? "metodo" : "funcion";
-
-        if (tabla.existeEnAmbito(nombre, "global")) {
-            registrarError(nombreToken, "La funcion o metodo '" + nombre + "' ya existe");
-        }
-
-        if (categoria.equals("metodo") && nombre.equals("main")) {
-            contadorMain++;
-
-            if (contadorMain > 1) {
-                registrarError(nombreToken, "Solo puede existir un metodo main");
-            }
-        }
-
-        int inicioParams = i + 3;
-        int finParams = buscarParentesisDerecho(tokens, inicioParams);
-
-        String infoParametros = obtenerInfoParametros(tokens, inicioParams, finParams);
-
-        tabla.agregarSimbolo(nombre, categoria, tipo, "global", infoParametros,
-                nombreToken.getLinea(), nombreToken.getColumna());
-
-        registrarParametros(tokens, inicioParams, finParams, nombre);
-
-        funcionPendiente = nombre;
-        return finParams;
     }
 
     //Procesa una asignacion
@@ -491,6 +511,11 @@ public class AnalizadorSemantico {
                 if (actual.equals("*") || actual.equals("/")) {
                     double izq = Double.parseDouble(copia.get(i - 1));
                     double der = Double.parseDouble(copia.get(i + 1));
+
+                    if (actual.equals("/") && der == 0) {
+                        return null;
+                    }
+
                     double resultado = actual.equals("*") ? izq * der : izq / der;
 
                     copia.set(i - 1, String.valueOf(resultado));
@@ -599,6 +624,10 @@ public class AnalizadorSemantico {
                 if (simbolo == null) {
                     registrarError(token, "La variable '" + token.getLexema() + "' no ha sido declarada");
                     continue;
+                }
+
+                if (simbolo.getValorInfo().equals("no inicializado")) {
+                    registrarError(token, "El simbolo '" + token.getLexema() + "' se usa sin estar inicializado");
                 }
 
                 tieneValor = true;
@@ -880,6 +909,16 @@ public class AnalizadorSemantico {
         }
 
         return desde;
+    }
+
+    //Reinicia el manejo interno de ambitos
+    private void reiniciarAmbitos() {
+        pilaAmbitos.clear();
+        nivelesFuncion.clear();
+        pilaAmbitos.push("global");
+        nivelIndentacion = 0;
+        funcionPendiente = null;
+        funcionActual = null;
     }
 
     //Retorna el ambito actual

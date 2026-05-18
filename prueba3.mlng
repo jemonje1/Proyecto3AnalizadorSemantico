@@ -1,6 +1,7 @@
-int numero = 0;
-read(numero);
-if (numero > 0)
-    write("El número es positivo");
-else
-    write("El número no es positivo");
+void main()
+    int edad = 18;
+    read(edad);
+    if(edad >= 18)
+        write("Mayor de edad");
+    else
+        write("Menor de edad");

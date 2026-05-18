@@ -1,0 +1,4 @@
+void main()
+    const int limite = 10;
+    limite = 20;
+    write(limite);

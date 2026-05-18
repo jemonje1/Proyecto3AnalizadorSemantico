@@ -1,1 +1,2 @@
-write("Hola Mundo");
+void main()
+    write("Hola Mundo");

@@ -1,5 +1,7 @@
-int sumar(int x, int y)
-    return x + y;
+void main()
+    int x = suma(2, 3);
+    write(x);
 
-int resultado = sumar(8, 3);
-write(resultado);
+int suma(int a, int b)
+    int resultado = a + b;
+    return resultado;
