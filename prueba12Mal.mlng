@@ -1,0 +1,66 @@
+# Prueba grande con errores de MiniLang
+# Este archivo mezcla errores lexicos, sintacticos y semanticos
+# El compilador debe reportar todos los errores posibles y no detenerse al primero
+
+const int LIMITE = 100;
+const string TEXTO = "hola";
+const bool BANDERA = true;
+
+int sumar(int a, int b)
+    int resultado = a + b;
+    return resultado;
+
+float sinReturn(float x)
+    float temporal = x * 2.5;
+    # Error semantico: esta funcion no retorna valor
+
+void imprimir()
+    write("Soy un metodo void");
+
+void main()
+    # Error semantico: variable usada sin declarar
+    int x = y + 1;
+
+    # Error semantico: cambio de constante ya inicializada
+    LIMITE = 200;
+
+    # Error semantico: tipo incompatible
+    string textoLocal = "mundo";
+    int numero = textoLocal + 5;
+
+    # Error semantico: bool operado aritmeticamente
+    bool activo = true;
+    int raro = activo + 3;
+
+    # Error semantico: llamada con cantidad incorrecta de argumentos
+    int sumaMala = sumar(1);
+
+    # Error semantico: llamada con tipo incorrecto
+    int sumaMalaDos = sumar("hola", 2);
+
+    # Error semantico: usar metodo void como valor
+    int valorVoid = imprimir();
+
+    # Error semantico: return dentro de metodo void con valor
+    return 10;
+
+    # Error lexico: caracter no valido
+    int lexico = 5 @ 2;
+
+    # Error sintactico: asignacion incompleta
+    int roto = ;
+
+    # Error semantico: variable duplicada en el mismo ambito
+    int duplicada = 1;
+    int duplicada = 2;
+
+    # Error semantico: parametro duplicado en funcion
+    write("Antes de funcion con parametro duplicado");
+
+int parametrosMalos(int a, int a)
+    int resultado = a + 1;
+    return resultado;
+
+void main()
+    # Error semantico: segundo main
+    write("Segundo main invalido");

@@ -1,6 +1,7 @@
 package AnalizadorSintactico;
 
 import AnalizadorLexico.Token;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -17,236 +18,557 @@ public class Parser {
     }
 
     //METODOS
-    //Parsea la lista de tokens usando reducciones por reglas
+    //Parsea la lista de tokens validando sentencias de MiniLang
     public boolean parsear(List<Token> tokensOriginales) {
         erroresSintacticos.clear();
 
-        List<Token> tokens = normalizarTokens(tokensOriginales);
-        List<String> pilaSimbolos = new ArrayList<>();
-        List<Token> pilaTokens = new ArrayList<>();
+        List<Token> tokens = tokensOriginales == null ? new ArrayList<>() : tokensOriginales;
 
-        int indice = 0;
+        for (int i = 0; i < tokens.size(); i++) {
+            Token actual = tokens.get(i);
 
-        while (indice < tokens.size()) {
-            Token actual = tokens.get(indice);
-            String simbolo = actual.getTipo().name();
+            if (actual.getTipo() == Token.TipoToken.EOF) {
+                break;
+            }
 
-            if (actual.getTipo() == Token.TipoToken.DESCONOCIDO) {
-                registrarError(actual, "No se esperaba el token '" + actual.getLexema() + "'");
-                indice++;
+            if (esIgnorable(actual)) {
                 continue;
             }
 
-            if (actual.getTipo() == Token.TipoToken.EOF) {
-                boolean cambio;
-
-                do {
-                    cambio = reducir(pilaSimbolos, pilaTokens, "EOF");
-                } while (cambio);
-
-                if (pilaSimbolos.size() == 1 && "Program".equals(pilaSimbolos.get(0))) {
-                    return erroresSintacticos.isEmpty();
-                }
-
-                if (pilaSimbolos.isEmpty()) {
-                    return erroresSintacticos.isEmpty();
-                }
-
-                Token t = pilaTokens.isEmpty() ? actual : pilaTokens.get(pilaTokens.size() - 1);
-                registrarError(t, "Cadena incompleta o estructura no reducida. Pila final: " + pilaSimbolos);
-                return false;
+            if (actual.getTipo() == Token.TipoToken.DESCONOCIDO) {
+                registrarError(actual, "No se esperaba el token '" + actual.getLexema() + "'");
+                continue;
             }
 
-            pilaSimbolos.add(simbolo);
-            pilaTokens.add(actual);
+            if (actual.getTipo() == Token.TipoToken.CONST) {
+                i = validarConstante(tokens, i);
+                continue;
+            }
 
-            boolean cambio;
+            if (esTipoDato(actual)) {
+                if (esCabeceraFuncion(tokens, i)) {
+                    i = validarCabeceraFuncionOMetodo(tokens, i);
+                } else {
+                    i = validarDeclaracion(tokens, i);
+                }
 
-            do {
-                String lookahead = (indice + 1 < tokens.size()) ? tokens.get(indice + 1).getTipo().name() : "EOF";
-                cambio = reducir(pilaSimbolos, pilaTokens, lookahead);
-            } while (cambio);
+                continue;
+            }
 
-            indice++;
+            if (actual.getTipo() == Token.TipoToken.VOID) {
+                i = validarCabeceraFuncionOMetodo(tokens, i);
+                continue;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.IF || actual.getTipo() == Token.TipoToken.WHILE) {
+                i = validarControl(tokens, i);
+                continue;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.ELSE) {
+                i = validarElse(tokens, i);
+                continue;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.RETURN) {
+                i = validarReturn(tokens, i);
+                continue;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.READ) {
+                i = validarRead(tokens, i);
+                continue;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.WRITE) {
+                i = validarWrite(tokens, i);
+                continue;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.ID) {
+                if (siguienteEs(tokens, i, Token.TipoToken.IGUAL)) {
+                    i = validarAsignacion(tokens, i);
+                } else if (siguienteEs(tokens, i, Token.TipoToken.PARENIZQ)) {
+                    i = validarLlamada(tokens, i);
+                } else {
+                    registrarError(actual, "Sentencia invalida con identificador '" + actual.getLexema() + "'");
+                }
+
+                continue;
+            }
+
+            registrarError(actual, "No se esperaba el token '" + actual.getLexema() + "'");
         }
 
         return erroresSintacticos.isEmpty();
     }
 
-    //Intenta reducir el final de la pila usando las reglas cargadas
-    private boolean reducir(List<String> pilaSimbolos, List<Token> pilaTokens, String lookahead) {
-        boolean redujoAlgo = false;
+    //Valida una declaracion de constante
+    private int validarConstante(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
 
-        if (debeInsertarStmtsVacio(pilaSimbolos, lookahead)) {
-            pilaSimbolos.add("Stmts");
-            pilaTokens.add(tokenVirtual(pilaTokens));
-            return true;
+        if (!existe(tokens, i + 1) || !esTipoDato(tokens.get(i + 1))) {
+            registrarError(inicio, "Constante sin tipo valido");
+            return avanzarHastaFinSentencia(tokens, i);
         }
 
-        for (Reglas regla : grafo.getReglas()) {
-            List<String> cuerpo = regla.getCuerpo();
+        if (!existe(tokens, i + 2) || tokens.get(i + 2).getTipo() != Token.TipoToken.ID) {
+            registrarError(inicio, "Constante sin nombre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
 
-            if (cuerpo.isEmpty()) {
-                continue;
+        int pos = i + 3;
+
+        if (existe(tokens, pos) && tokens.get(pos).getTipo() == Token.TipoToken.IGUAL) {
+            if (esFinSentencia(tokens, pos + 1)) {
+                registrarError(tokens.get(pos), "Asignacion incompleta en constante");
+                return avanzarHastaFinSentencia(tokens, i);
             }
 
-            if (!regla.aceptaLookahead(lookahead)) {
-                continue;
+            pos = avanzarHastaPyc(tokens, pos + 1);
+
+            if (!esPyc(tokens, pos)) {
+                registrarError(inicio, "Falta punto y coma en declaracion de constante");
+                return pos;
             }
 
-            if (terminaCon(pilaSimbolos, cuerpo)) {
-                int eliminar = cuerpo.size();
-                Token referencia = pilaTokens.get(pilaTokens.size() - 1);
+            return pos;
+        }
 
-                for (int i = 0; i < eliminar; i++) {
-                    pilaSimbolos.remove(pilaSimbolos.size() - 1);
-                    pilaTokens.remove(pilaTokens.size() - 1);
+        if (!esPyc(tokens, pos)) {
+            registrarError(inicio, "Falta punto y coma en declaracion de constante");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        return pos;
+    }
+
+    //Valida una declaracion de variable
+    private int validarDeclaracion(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!existe(tokens, i + 1) || tokens.get(i + 1).getTipo() != Token.TipoToken.ID) {
+            registrarError(inicio, "Declaracion de variable sin nombre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int pos = i + 2;
+
+        if (existe(tokens, pos) && tokens.get(pos).getTipo() == Token.TipoToken.IGUAL) {
+            if (esFinSentencia(tokens, pos + 1)) {
+                registrarError(tokens.get(pos), "Asignacion incompleta en declaracion");
+                return avanzarHastaFinSentencia(tokens, i);
+            }
+
+            pos = avanzarHastaPyc(tokens, pos + 1);
+
+            if (!esPyc(tokens, pos)) {
+                registrarError(inicio, "Falta punto y coma en declaracion");
+                return pos;
+            }
+
+            return pos;
+        }
+
+        if (!esPyc(tokens, pos)) {
+            registrarError(inicio, "Falta punto y coma en declaracion");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        return pos;
+    }
+
+    //Valida una asignacion
+    private int validarAsignacion(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!existe(tokens, i + 1) || tokens.get(i + 1).getTipo() != Token.TipoToken.IGUAL) {
+            registrarError(inicio, "Asignacion invalida");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        if (esFinSentencia(tokens, i + 2)) {
+            registrarError(tokens.get(i + 1), "Asignacion incompleta");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int pos = avanzarHastaPyc(tokens, i + 2);
+
+        if (!esPyc(tokens, pos)) {
+            registrarError(inicio, "Falta punto y coma en asignacion");
+            return pos;
+        }
+
+        return pos;
+    }
+
+    //Valida una cabecera de funcion o metodo
+    private int validarCabeceraFuncionOMetodo(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!existe(tokens, i + 1) || tokens.get(i + 1).getTipo() != Token.TipoToken.ID) {
+            registrarError(inicio, "Funcion o metodo sin nombre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        if (!existe(tokens, i + 2) || tokens.get(i + 2).getTipo() != Token.TipoToken.PARENIZQ) {
+            registrarError(inicio, "Funcion o metodo sin parentesis de apertura");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int cierre = buscarParentesisDerecho(tokens, i + 3);
+
+        if (cierre == -1) {
+            registrarError(inicio, "Funcion o metodo sin parentesis de cierre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        validarParametros(tokens, i + 3, cierre);
+
+        if (!tieneBloqueIndentado(tokens, cierre + 1)) {
+            registrarError(inicio, "Funcion o metodo sin bloque indentado");
+        }
+
+        return cierre;
+    }
+
+    //Valida una sentencia if o while
+    private int validarControl(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!existe(tokens, i + 1) || tokens.get(i + 1).getTipo() != Token.TipoToken.PARENIZQ) {
+            registrarError(inicio, "Estructura de control sin parentesis de apertura");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int cierre = buscarParentesisDerecho(tokens, i + 2);
+
+        if (cierre == -1) {
+            registrarError(inicio, "Estructura de control sin parentesis de cierre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        if (cierre == i + 2) {
+            registrarError(inicio, "Condicion vacia en estructura de control");
+        }
+
+        if (!tieneBloqueIndentado(tokens, cierre + 1)) {
+            registrarError(inicio, "Estructura de control sin bloque indentado");
+        }
+
+        return cierre;
+    }
+
+    //Valida una sentencia else
+    private int validarElse(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!tieneBloqueIndentado(tokens, i + 1)) {
+            registrarError(inicio, "Else sin bloque indentado");
+        }
+
+        return i;
+    }
+
+    //Valida una sentencia return
+    private int validarReturn(List<Token> tokens, int i) {
+        int pos = avanzarHastaPyc(tokens, i + 1);
+
+        if (esPyc(tokens, pos)) {
+            return pos;
+        }
+
+        if (esFinSentencia(tokens, pos)) {
+            return pos;
+        }
+
+        registrarError(tokens.get(i), "Return invalido");
+        return pos;
+    }
+
+    //Valida una sentencia read
+    private int validarRead(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!existe(tokens, i + 1) || tokens.get(i + 1).getTipo() != Token.TipoToken.PARENIZQ) {
+            registrarError(inicio, "Read sin parentesis de apertura");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int cierre = buscarParentesisDerecho(tokens, i + 2);
+
+        if (cierre == -1) {
+            registrarError(inicio, "Read sin parentesis de cierre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        if (cierre == i + 2 || tokens.get(i + 2).getTipo() != Token.TipoToken.ID) {
+            registrarError(inicio, "Read espera un identificador");
+        }
+
+        int pos = cierre + 1;
+
+        if (!esPyc(tokens, pos)) {
+            registrarError(inicio, "Falta punto y coma en read");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        return pos;
+    }
+
+    //Valida una sentencia write
+    private int validarWrite(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!existe(tokens, i + 1) || tokens.get(i + 1).getTipo() != Token.TipoToken.PARENIZQ) {
+            registrarError(inicio, "Write sin parentesis de apertura");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int cierre = buscarParentesisDerecho(tokens, i + 2);
+
+        if (cierre == -1) {
+            registrarError(inicio, "Write sin parentesis de cierre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        if (cierre == i + 2) {
+            registrarError(inicio, "Write sin argumentos");
+        }
+
+        int pos = cierre + 1;
+
+        if (!esPyc(tokens, pos)) {
+            registrarError(inicio, "Falta punto y coma en write");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        return pos;
+    }
+
+    //Valida una llamada de funcion o metodo como sentencia
+    private int validarLlamada(List<Token> tokens, int i) {
+        Token inicio = tokens.get(i);
+
+        if (!existe(tokens, i + 1) || tokens.get(i + 1).getTipo() != Token.TipoToken.PARENIZQ) {
+            registrarError(inicio, "Llamada sin parentesis de apertura");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int cierre = buscarParentesisDerecho(tokens, i + 2);
+
+        if (cierre == -1) {
+            registrarError(inicio, "Llamada sin parentesis de cierre");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        int pos = cierre + 1;
+
+        if (!esPyc(tokens, pos)) {
+            registrarError(inicio, "Falta punto y coma en llamada");
+            return avanzarHastaFinSentencia(tokens, i);
+        }
+
+        return pos;
+    }
+
+    //Valida parametros separados por coma
+    private void validarParametros(List<Token> tokens, int inicio, int fin) {
+        if (inicio >= fin) {
+            return;
+        }
+
+        boolean esperandoTipo = true;
+        boolean esperandoNombre = false;
+        boolean esperandoComa = false;
+
+        for (int i = inicio; i < fin; i++) {
+            Token actual = tokens.get(i);
+
+            if (esperandoTipo) {
+                if (!esTipoDato(actual)) {
+                    registrarError(actual, "Parametro sin tipo valido");
+                    return;
                 }
 
-                pilaSimbolos.add(regla.getCabeza());
-                pilaTokens.add(referencia);
-                redujoAlgo = true;
-                break;
+                esperandoTipo = false;
+                esperandoNombre = true;
+                continue;
+            }
+
+            if (esperandoNombre) {
+                if (actual.getTipo() != Token.TipoToken.ID) {
+                    registrarError(actual, "Parametro sin nombre");
+                    return;
+                }
+
+                esperandoNombre = false;
+                esperandoComa = true;
+                continue;
+            }
+
+            if (esperandoComa) {
+                if (actual.getTipo() != Token.TipoToken.COMA) {
+                    registrarError(actual, "Se esperaba coma entre parametros");
+                    return;
+                }
+
+                esperandoComa = false;
+                esperandoTipo = true;
             }
         }
 
-        if (redujoAlgo) {
-            return true;
+        if (esperandoTipo && inicio < fin) {
+            registrarError(tokens.get(fin - 1), "Lista de parametros termina con coma");
         }
 
-        if (debeRecuperar(pilaSimbolos, lookahead)) {
-            int idx = pilaSimbolos.size() - 1;
-            Token t = pilaTokens.get(idx);
-
-            registrarError(t, "No se esperaba el token '" + t.getLexema() + "'");
-            pilaSimbolos.remove(idx);
-            pilaTokens.remove(idx);
-            return true;
+        if (esperandoNombre) {
+            registrarError(tokens.get(fin - 1), "Parametro incompleto");
         }
-
-        return false;
     }
 
-    //Inserta Stmts vacio cuando se cierra un bloque de indentacion
-    private boolean debeInsertarStmtsVacio(List<String> pilaSimbolos, String lookahead) {
-        if (!("DEDENT".equals(lookahead) || "EOF".equals(lookahead))) {
-            return false;
-        }
+    //Busca si despues existe salto de linea e indentacion
+    private boolean tieneBloqueIndentado(List<Token> tokens, int desde) {
+        boolean vioNewline = false;
 
-        if (pilaSimbolos.isEmpty()) {
-            return true;
-        }
+        for (int i = desde; i < tokens.size(); i++) {
+            Token actual = tokens.get(i);
 
-        String tope = pilaSimbolos.get(pilaSimbolos.size() - 1);
+            if (actual.getTipo() == Token.TipoToken.NEWLINE) {
+                vioNewline = true;
+                continue;
+            }
 
-        return "INDENT".equals(tope)
-                || "NEWLINE".equals(tope)
-                || "ELSE".equals(tope);
-    }
+            if (vioNewline && actual.getTipo() == Token.TipoToken.INDENT) {
+                return true;
+            }
 
-    //Detecta algunos errores claros y permite continuar el parseo
-    private boolean debeRecuperar(List<String> pilaSimbolos, String lookahead) {
-        if (pilaSimbolos.isEmpty()) {
-            return false;
-        }
+            if (actual.getTipo() == Token.TipoToken.EOF) {
+                return false;
+            }
 
-        String tope = pilaSimbolos.get(pilaSimbolos.size() - 1);
+            if (!vioNewline) {
+                return false;
+            }
 
-        if ("NEWLINE".equals(tope) && !"INDENT".equals(lookahead)) {
-            return true;
-        }
-
-        if ("COMA".equals(tope) && !"ID".equals(lookahead) && !"STRINGWORD".equals(lookahead)
-                && !"INTNUM".equals(lookahead) && !"FLOATNUM".equals(lookahead)
-                && !"PERNUM".equals(lookahead) && !"PARENIZQ".equals(lookahead)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    //Valida si la pila termina con el cuerpo de una regla
-    private boolean terminaCon(List<String> pila, List<String> sufijo) {
-        if (pila.size() < sufijo.size()) {
-            return false;
-        }
-
-        int inicio = pila.size() - sufijo.size();
-
-        for (int i = 0; i < sufijo.size(); i++) {
-            if (!pila.get(inicio + i).equals(sufijo.get(i))) {
+            if (actual.getTipo() != Token.TipoToken.NEWLINE) {
                 return false;
             }
         }
 
-        return true;
+        return false;
     }
 
-    //Crea un token virtual para representar producciones vacias
-    private Token tokenVirtual(List<Token> pilaTokens) {
-        if (pilaTokens.isEmpty()) {
-            return new Token(Token.TipoToken.NEWLINE, "", 1, 1);
-        }
-
-        Token t = pilaTokens.get(pilaTokens.size() - 1);
-        return new Token(Token.TipoToken.NEWLINE, "", t.getLinea(), t.getColumna());
-    }
-
-    //Normaliza saltos de linea para conservar solo los que son estructurales
-    private List<Token> normalizarTokens(List<Token> originales) {
-        List<Token> resultado = new ArrayList<>();
-
-        for (int i = 0; i < originales.size(); i++) {
-            Token actual = originales.get(i);
-
-            if (actual.getTipo() != Token.TipoToken.NEWLINE) {
-                resultado.add(actual);
-                continue;
-            }
-
-            Token prev = ultimoNoNewline(resultado);
-            Token next = siguienteNoNewline(originales, i + 1);
-
-            if (prev == null || next == null) {
-                continue;
-            }
-
-            boolean estructural =
-                    (prev.getTipo() == Token.TipoToken.PARENDER && next.getTipo() == Token.TipoToken.INDENT)
-                            || (prev.getTipo() == Token.TipoToken.ELSE && next.getTipo() == Token.TipoToken.INDENT);
-
-            if (estructural) {
-                resultado.add(actual);
-            }
-        }
-
-        if (resultado.isEmpty() || resultado.get(resultado.size() - 1).getTipo() != Token.TipoToken.EOF) {
-            resultado.add(new Token(Token.TipoToken.EOF, "$", 1, 1));
-        }
-
-        return resultado;
-    }
-
-    //Obtiene el ultimo token que no sea salto de linea
-    private Token ultimoNoNewline(List<Token> tokens) {
-        for (int i = tokens.size() - 1; i >= 0; i--) {
-            if (tokens.get(i).getTipo() != Token.TipoToken.NEWLINE) {
-                return tokens.get(i);
-            }
-        }
-
-        return null;
-    }
-
-    //Obtiene el siguiente token que no sea salto de linea
-    private Token siguienteNoNewline(List<Token> tokens, int desde) {
+    //Avanza hasta encontrar punto y coma o fin de sentencia
+    private int avanzarHastaPyc(List<Token> tokens, int desde) {
         for (int i = desde; i < tokens.size(); i++) {
-            if (tokens.get(i).getTipo() != Token.TipoToken.NEWLINE) {
-                return tokens.get(i);
+            Token actual = tokens.get(i);
+
+            if (actual.getTipo() == Token.TipoToken.PYC
+                    || actual.getTipo() == Token.TipoToken.NEWLINE
+                    || actual.getTipo() == Token.TipoToken.DEDENT
+                    || actual.getTipo() == Token.TipoToken.EOF) {
+                return i;
             }
         }
 
-        return null;
+        return tokens.size() - 1;
+    }
+
+    //Avanza hasta un punto seguro de recuperacion
+    private int avanzarHastaFinSentencia(List<Token> tokens, int desde) {
+        for (int i = desde; i < tokens.size(); i++) {
+            Token actual = tokens.get(i);
+
+            if (actual.getTipo() == Token.TipoToken.PYC
+                    || actual.getTipo() == Token.TipoToken.NEWLINE
+                    || actual.getTipo() == Token.TipoToken.DEDENT
+                    || actual.getTipo() == Token.TipoToken.EOF) {
+                return i;
+            }
+        }
+
+        return tokens.size() - 1;
+    }
+
+    //Busca el parentesis derecho correspondiente
+    private int buscarParentesisDerecho(List<Token> tokens, int desde) {
+        int abiertos = 0;
+
+        for (int i = desde; i < tokens.size(); i++) {
+            Token actual = tokens.get(i);
+
+            if (actual.getTipo() == Token.TipoToken.PARENIZQ) {
+                abiertos++;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.PARENDER) {
+                if (abiertos == 0) {
+                    return i;
+                }
+
+                abiertos--;
+            }
+
+            if (actual.getTipo() == Token.TipoToken.NEWLINE
+                    || actual.getTipo() == Token.TipoToken.DEDENT
+                    || actual.getTipo() == Token.TipoToken.EOF) {
+                return -1;
+            }
+        }
+
+        return -1;
+    }
+
+    //Valida si existe una posicion en la lista
+    private boolean existe(List<Token> tokens, int i) {
+        return i >= 0 && i < tokens.size();
+    }
+
+    //Valida si una posicion tiene punto y coma
+    private boolean esPyc(List<Token> tokens, int i) {
+        return existe(tokens, i) && tokens.get(i).getTipo() == Token.TipoToken.PYC;
+    }
+
+    //Valida si una posicion es fin de sentencia
+    private boolean esFinSentencia(List<Token> tokens, int i) {
+        if (!existe(tokens, i)) {
+            return true;
+        }
+
+        Token.TipoToken tipo = tokens.get(i).getTipo();
+
+        return tipo == Token.TipoToken.PYC
+                || tipo == Token.TipoToken.NEWLINE
+                || tipo == Token.TipoToken.DEDENT
+                || tipo == Token.TipoToken.EOF;
+    }
+
+    //Valida si se puede ignorar el token en el recorrido principal
+    private boolean esIgnorable(Token token) {
+        return token.getTipo() == Token.TipoToken.NEWLINE
+                || token.getTipo() == Token.TipoToken.INDENT
+                || token.getTipo() == Token.TipoToken.DEDENT;
+    }
+
+    //Valida si el siguiente token tiene un tipo especifico
+    private boolean siguienteEs(List<Token> tokens, int i, Token.TipoToken tipo) {
+        return existe(tokens, i + 1) && tokens.get(i + 1).getTipo() == tipo;
+    }
+
+    //Valida si un token es cabecera de funcion
+    private boolean esCabeceraFuncion(List<Token> tokens, int i) {
+        return existe(tokens, i + 2)
+                && tokens.get(i + 1).getTipo() == Token.TipoToken.ID
+                && tokens.get(i + 2).getTipo() == Token.TipoToken.PARENIZQ;
+    }
+
+    //Valida si el token es tipo de dato
+    private boolean esTipoDato(Token token) {
+        return token.getTipo() == Token.TipoToken.INT
+                || token.getTipo() == Token.TipoToken.FLOAT
+                || token.getTipo() == Token.TipoToken.STRING
+                || token.getTipo() == Token.TipoToken.BOOL;
     }
 
     //Registra un error sintactico con linea y columna

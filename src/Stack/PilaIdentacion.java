@@ -97,16 +97,12 @@ public class PilaIdentacion {
     public List<AccionIdentacion> finalizarArchivo() {
         List<AccionIdentacion> acciones = new ArrayList<>();
 
-        if (ultimoNivel != 0) {
-            errores.add("Final del archivo: termino con indentacion abierta. Ultimo nivel detectado: "
-                    + ultimoNivel);
-        }
-
         while (!estaEnBase()) {
             desapilarNivel();
             acciones.add(AccionIdentacion.DEDENT);
         }
 
+        ultimoNivel = 0;
         return acciones;
     }
 

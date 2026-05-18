@@ -1,0 +1,97 @@
+# Prueba grande valida de MiniLang
+# Este archivo mezcla variables, constantes, funciones, metodos, if, while, read y write
+# Todo lo que aparece despues de numeral debe ser ignorado por el lexico
+
+const int LIMITE = 100;
+const float PI = 3.1416;
+const string MENSAJE = "Sistema iniciado";
+const bool ACTIVO = true;
+
+int sumar(int a, int b)
+    # Funcion que suma dos enteros
+    int resultado = a + b;
+    return resultado;
+
+float calcularArea(float radio)
+    # Funcion que calcula un area aproximada
+    float area = PI * radio * radio;
+    return area;
+
+bool esMayor(int valor, int limite)
+    # Funcion que retorna una comparacion
+    bool respuesta = valor > limite;
+    return respuesta;
+
+void mostrarInicio()
+    # Metodo sin parametros
+    write(MENSAJE);
+    write("Bienvenido a MiniLang");
+
+void mostrarResultado(string titulo, int valor)
+    # Metodo con parametros
+    write(titulo, valor);
+
+void main()
+    # Inicio del programa principal
+    mostrarInicio();
+
+    int base = 10;
+    int altura = 20;
+    int total = sumar(base, altura);
+
+    float radio = 5.5;
+    float area = calcularArea(radio);
+
+    bool mayor = esMayor(total, LIMITE);
+    bool activoLocal = ACTIVO;
+
+    string estado = "procesando";
+    write("Estado actual", estado);
+
+    # Validacion con if
+    if(total < LIMITE)
+        write("El total esta dentro del limite");
+        mostrarResultado("Total calculado", total);
+    else
+        write("El total sobrepasa el limite");
+
+    # Ciclo while con contador
+    int contador = 0;
+    while(contador < 3)
+        write("Iteracion", contador);
+        contador = contador + 1;
+
+    # Lectura simulada
+    int entrada = 1;
+    read(entrada);
+
+    if(entrada == 1)
+        write("Entrada valida");
+    else
+        write("Entrada distinta");
+
+    # Operaciones numericas adicionales
+    int doble = total * 2;
+    float mezcla = area + doble;
+    int diferencia = doble - total;
+
+    write("Area", area);
+    write("Mezcla", mezcla);
+    write("Diferencia", diferencia);
+
+    # Uso de constante declarada sin cambio
+    const int FACTOR = 2;
+    int escalado = total * FACTOR;
+    write("Escalado", escalado);
+
+    # Comparaciones booleanas validas
+    bool menor = total < LIMITE;
+    bool igual = total == LIMITE;
+    bool diferente = total != LIMITE;
+
+    write("Menor", menor);
+    write("Igual", igual);
+    write("Diferente", diferente);
+
+    # Fin de prueba valida
+    write("Programa finalizado");
