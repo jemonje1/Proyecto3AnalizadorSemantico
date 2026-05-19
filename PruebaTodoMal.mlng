@@ -1,0 +1,174 @@
+# MiniLang - Mixto: 2 errores LÉXICOS + 3 errores SINTÁCTICOS
+
+# (L1) Identificador > 31 caracteres (debe reportarse y truncarse)
+int thisIdentifierIsDefinitelyMoreThanThirtyOneChars123;
+
+int x;
+
+# (S1) Falta ';' al final
+x = 10
+
+Write(x);
+
+# (L2) Carácter inesperado '@' (se ignora y aún así la sentencia queda válida)
+Write(@x);
+
+# (S2) Falta ')' en Read
+Read(x;
+
+# (S3) Llamada a función sin coma entre argumentos
+x = suma(1 2);
+
+# MiniLang - Archivo con errores léxicos (>=5)
+# Incluye: indentación inválida, carácter inesperado, número mal formado, string sin cerrar (EOF),
+# identificador >31.
+
+func int mul(int a, int b):
+    int r;
+    r = a * b;
+    return r;
+
+int total;
+total = mul(2, 3);
+Write(total);
+
+# 1) Indentación inválida: aumenta a 5 tabs y luego baja a 4 (nivel inexistente)
+while total < 10:
+					total = total + 1;   # 5 espacios (nuevo nivel)
+				Write(total);         # 4 espacios (nivel no existe en la pila)
+
+# 2) Carácter inesperado: '$' (aparece como carácter suelto no válido)
+int cost$;
+cost$ = 5;
+
+# 3) Número mal formado: dos puntos decimales / patrón inválido
+float z;
+z = 0.12.3;
+
+# 4) Identificador demasiado largo (>31)
+string this_identifier_name_is_way_way_way_too_long_for_limit;
+this_identifier_name_is_way_way_way_too_long_for_limit = "ok";
+
+# 5) Cadena sin cerrar antes de EOF
+Write("Fin
+
+# MiniLang - Errores SINTÁCTICOS (archivo 1)
+# Objetivo: provocar >=5 errores sintácticos (sin errores léxicos).
+
+int a, b;
+a = 10;
+b = 5;
+
+# (E1) Falta ';' al final
+Write("Hola Mundo")
+
+# (E2) Falta ')'
+Write("Missing paren";
+
+# (E3) if sin ':'
+if a > b
+Write("after if");
+
+# (E4) while sin INDENT (la siguiente línea NO está indentada)
+while a < 20:
+Write("no indent");
+a = a + 1;
+
+# (E5) Paréntesis extra
+b = (a + 2));
+
+# (E6) Llamada con argumentos sin coma
+a = suma(1 2);
+
+# MiniLang - Errores SINTÁCTICOS (archivo 2)
+# Objetivo: provocar >=5 errores sintácticos (sin errores léxicos).
+
+# Función correcta para luego provocar errores en llamadas
+func int inc(int x):
+    return x + 1;
+
+int a, b;
+a = 0;
+
+# (E1) Falta ':' en encabezado de función
+func int bad(int x, int y)
+Write("after bad");
+
+# (E2) Declaración sin coma entre IDs
+int c d;
+
+# (E3) Llamada con coma final (falta argumento)
+a = inc(1,);
+
+# (E4) return sin expresión (dentro de función)
+func int rtest(int x):
+    return;
+
+# (E5) if con ':' pero sin INDENT
+if a > 0:
+Write("no indent");
+
+# (E6) Expresión mal formada: operador inesperado '*'
+b = 1 + * 2;
+
+# MiniLang - Archivo con errores léxicos (>=5)
+# Incluye: indentación inválida, carácter inesperado, número mal formado, string sin cerrar (EOF),
+# identificador >31.
+
+func int mul(int a, int b):
+    int r;
+    r = a * b;
+    return r;
+
+int total;
+total = mul(2, 3);
+Write(total);
+
+# 1) Indentación inválida: aumenta a 5 tabs y luego baja a 4 (nivel inexistente)
+while total < 10:
+					total = total + 1;   # 5 espacios (nuevo nivel)
+				Write(total);         # 4 espacios (nivel no existe en la pila)
+
+# 2) Carácter inesperado: '$' (aparece como carácter suelto no válido)
+int cost$;
+cost$ = 5;
+
+# 3) Número mal formado: dos puntos decimales / patrón inválido
+float z;
+z = 0.12.3;
+
+# 4) Identificador demasiado largo (>31)
+string this_identifier_name_is_way_way_way_too_long_for_limit;
+this_identifier_name_is_way_way_way_too_long_for_limit = "ok";
+
+# 5) Cadena sin cerrar antes de EOF
+Write("Fin
+
+# MiniLang - Archivo con errores léxicos (>=5)
+# Errores esperados (ejemplos): carácter inesperado, cadena sin cerrar, número mal formado,
+# indentación inválida, identificador >31 (truncar y continuar).
+
+int x;
+x = 10;
+
+# 1) Carácter inesperado: '@'
+x = x @ 2;
+
+# 2) Cadena sin cerrar antes de NEWLINE
+Write("Hola Mundo);
+
+# 3) Número mal formado (dos puntos decimales)
+float y;
+y = 12..3;
+
+# 4) Identificador demasiado largo (>31)
+int thisIdentifierIsDefinitelyMoreThanThirtyOneChars123;
+thisIdentifierIsDefinitelyMoreThanThirtyOneChars123 = 1;
+
+# 5) Indentación inválida (dedent a un nivel inexistente)
+if x > 0:
+				Write("ok");
+		Write("bad indent");  # (2 tabs) debería provocar error de indentación
+
+# 6) Otro carácter inesperado: '¿'
+Write(¿x);
