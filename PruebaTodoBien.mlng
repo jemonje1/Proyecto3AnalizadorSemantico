@@ -1,53 +1,74 @@
-# MiniLang - Set de prueba (TODO correcto: sin errores léxicos ni sintácticos)
+# MiniLang - Set de prueba adaptado a nuestra gramatica
+# TODO correcto: sin errores lexicos, sintacticos ni semanticos
 # Integra en un solo archivo las 5 pruebas del enunciado:
 # 1) Hola Mundo
-# 2) Operación aritmética básica
+# 2) Operacion aritmetica basica
 # 3) Read + if
-# 4) Función con parámetros + return (llamada desde programa principal)
+# 4) Funcion con parametros + return
 # 5) Variables + Read/Write + while
 
-# --- Prueba 1: Hola Mundo ---
-Write("Hola Mundo");
-
-# --- Prueba 2: Operación aritmética básica ---
-int a, b, result;
-a = 10;
-b = 5;
-result = a + b * 2;
-Write(result);
-
-# --- Prueba 3: Read + if ---
-int n;
-Write("Ingrese un número:");
-Read(n);
-if n > 0:
-    Write("Positivo");
-else:
-    Write("Cero o negativo");
-
-# --- Prueba 4: Función con parámetros + return ---
-func int suma(int x, int y):
-    int r;
-    r = x + y;
+# --- Prueba 4: Funcion con parametros + return ---
+# En nuestra gramatica las funciones se declaran como: tipo nombre(parametros)
+# No usamos la palabra func ni dos puntos
+int suma(int x, int y)
+    int r = x + y;
     return r;
 
-int s;
-s = suma(3, 4);
-Write(s);
+# --- Programa principal ---
+# En nuestra gramatica debe existir un metodo main de tipo void
+void main()
+    # --- Prueba 1: Hola Mundo ---
+    # Write cambia a write en minuscula
+    write("Hola Mundo");
 
-# --- Prueba 5: Variables + Read/Write + while ---
-int count;
-count = 0;
-while count < 3:
-    Write(count);
-    count = count + 1;
+    # --- Prueba 2: Operacion aritmetica basica ---
+    # No usamos declaraciones multiples como int a, b, result
+    # Cada variable se declara en una linea
+    int a = 10;
+    int b = 5;
+    int result = a + b * 2;
+    write(result);
 
-# Extras (para estresar expresiones y tipos primitivos)
-float pi;
-pi = 3.1416;
-Write(pi);
+    # --- Prueba 3: Read + if ---
+    # Read cambia a read en minuscula
+    # if usa parentesis y no usa dos puntos
+    int n = 1;
+    write("Ingrese un numero:");
+    read(n);
+    if(n > 0)
+        write("Positivo");
+    else
+        write("Cero o negativo");
 
-bool flag;
-flag = true;
-if not flag == false:
-    Write("flag está en true");
+    # --- Prueba 4: Llamada a funcion ---
+    # La funcion suma fue declarada arriba y retorna int
+    int s = suma(3, 4);
+    write(s);
+
+    # --- Prueba 5: Variables + Read/Write + while ---
+    # while usa parentesis y bloque por indentacion
+    int count = 0;
+    while(count < 3)
+        write(count);
+        count = count + 1;
+
+    # --- Extras para expresiones y tipos primitivos ---
+    float pi = 3.1416;
+    write(pi);
+
+    bool flag = true;
+    if(!(flag == false))
+        write("flag esta en true");
+
+# --- Resumen de cambios de nuestra gramatica ---
+# 1. Las palabras reservadas son en minuscula: write, read, if, else, while
+# 2. Las funciones no usan func, se declaran como tipo nombre(parametros)
+# 3. Los metodos se declaran con void, por ejemplo void main()
+# 4. Las condiciones de if y while van entre parentesis
+# 5. No usamos dos puntos al final de if, else, while o funciones
+# 6. Los bloques se definen por indentacion de 4 espacios
+# 7. No usamos llaves para abrir o cerrar bloques
+# 8. No usamos declaraciones multiples como int a, b, result
+# 9. Cada declaracion debe ir en su propia linea
+# 10. El operador logico not se representa con !
+# 11. Los comentarios se escriben con # y el lexico ignora lo que venga despues
